@@ -1,0 +1,9 @@
+{
+  "name": "Help Pro",
+  "description": "Sistema de controle de quilometragem.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
