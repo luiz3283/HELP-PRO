@@ -5,8 +5,9 @@ import { analyzeOdometer } from '../services/geminiService';
 import { CameraCapture } from './Camera';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Bike, CheckCircle, Upload, AlertTriangle, Sparkles, LogOut, MapPin, Download, Calendar } from 'lucide-react';
+import { Bike, CheckCircle, Upload, AlertTriangle, Sparkles, LogOut, MapPin, Download, Calendar, Mail } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 interface Props {
   user: User;
@@ -24,6 +25,7 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
   
   // Export State
   const [exportMonth, setExportMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [emailInput, setEmailInput] = useState('');
 
   useEffect(() => {
     loadTodayLog();
@@ -168,6 +170,74 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
     setStatusMessage({ type: 'success', text: 'Planilha baixada!' });
   };
 
+  const handleExportPhotos = async () => {
+    if (!emailInput) {
+        setStatusMessage({ type: 'error', text: 'Digite um email para enviar.' });
+        return;
+    }
+
+    const logs = storageService.getLogs();
+    const userLogs = logs.filter(l => 
+        l.userId === user.id && 
+        l.date.startsWith(exportMonth)
+    );
+
+    const photosToZip: { name: string; data: string }[] = [];
+
+    userLogs.forEach(log => {
+        if (log.startPhoto) {
+            photosToZip.push({
+                name: `${log.date}_${log.startTime?.split('T')[1].slice(0,5).replace(':','h')}_inicio.jpg`,
+                data: log.startPhoto.split(',')[1]
+            });
+        }
+        if (log.endPhoto) {
+            photosToZip.push({
+                name: `${log.date}_${log.endTime?.split('T')[1].slice(0,5).replace(':','h')}_fim.jpg`,
+                data: log.endPhoto.split(',')[1]
+            });
+        }
+    });
+
+    if (photosToZip.length === 0) {
+        setStatusMessage({ type: 'error', text: 'Nenhuma foto encontrada neste mês.' });
+        return;
+    }
+
+    setStatusMessage({ type: 'success', text: 'Compactando fotos...' });
+
+    try {
+        const zip = new JSZip();
+        const folder = zip.folder(`Fotos_${user.name.split(' ')[0]}_${exportMonth}`);
+        
+        photosToZip.forEach(photo => {
+            folder?.file(photo.name, photo.data, { base64: true });
+        });
+
+        const content = await zip.generateAsync({ type: 'blob' });
+        
+        // Trigger Download
+        const url = window.URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Fotos-${user.name.replace(/\s+/g, '_')}-${exportMonth}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        // Open Mail Client
+        const subject = encodeURIComponent(`Fotos do Painel - ${user.name} - ${exportMonth}`);
+        const body = encodeURIComponent(`Olá,\n\nSegue em anexo o arquivo ZIP com as fotos do mês ${exportMonth}.\n\nColaborador: ${user.name}\nPlaca: ${user.vehiclePlate}\n\n*Por favor, anexe o arquivo baixado neste e-mail.*`);
+        window.location.href = `mailto:${emailInput}?subject=${subject}&body=${body}`;
+
+        setStatusMessage({ type: 'success', text: 'Baixado! Anexe o ZIP no email.' });
+    } catch (err) {
+        console.error(err);
+        setStatusMessage({ type: 'error', text: 'Erro ao criar ZIP.' });
+    }
+  };
+
   if (showCamera) {
     return <CameraCapture onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />;
   }
@@ -201,12 +271,14 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
       </div>
 
       <div className="p-4 mt-2 space-y-6">
-        {/* Reports Section (Moved from Admin) */}
+        {/* Reports Section */}
         <div className="bg-zinc-900 p-4 border border-zinc-800 flex flex-col gap-3">
              <div className="flex items-center gap-2 text-zinc-500 mb-1">
                 <Download size={16} className="text-yellow-400" />
-                <span className="text-xs font-bold uppercase tracking-widest">Relatórios</span>
+                <span className="text-xs font-bold uppercase tracking-widest">Relatórios e Fotos</span>
              </div>
+             
+             {/* Excel Row */}
              <div className="flex gap-2">
                 <div className="relative flex-1">
                     <input 
@@ -219,11 +291,32 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
                 </div>
                 <button 
                     onClick={handleExportExcel}
-                    className="bg-green-600 hover:bg-green-500 text-black font-bold uppercase text-xs px-4 h-10 shadow-lg transition"
+                    className="bg-green-600 hover:bg-green-500 text-black font-bold uppercase text-xs px-4 h-10 shadow-lg transition whitespace-nowrap"
                 >
                     Baixar Excel
                 </button>
              </div>
+
+             {/* Photos Row */}
+             <div className="mt-2 pt-2 border-t border-zinc-800">
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Enviar Fotos</label>
+                <div className="flex gap-2">
+                    <input 
+                        type="email" 
+                        placeholder="email@exemplo.com"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        className="w-full bg-black border border-zinc-700 text-white p-2 text-xs font-mono placeholder-zinc-700 outline-none h-10 focus:border-yellow-400"
+                    />
+                    <button 
+                        onClick={handleExportPhotos}
+                        className="bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-300 font-bold uppercase text-xs px-4 h-10 transition whitespace-nowrap flex items-center gap-2"
+                    >
+                        <Mail size={16} /> Enviar
+                    </button>
+                </div>
+                <p className="text-[10px] text-zinc-600 mt-1">* Baixa as fotos e abre seu app de email para anexar.</p>
+            </div>
         </div>
 
         {/* Status Card - Gritty Look */}
