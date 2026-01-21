@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, MileageLog, UserRole } from '../types';
 import { storageService } from '../services/storage';
-import { Users, FileText, Download, LogOut, Plus, Trash2, Search, MapPin, Zap, Calendar, Briefcase, Filter, X, Pencil, CheckCircle, AlertCircle } from 'lucide-react';
+import { Users, FileText, Download, LogOut, Plus, Trash2, Search, MapPin, Zap, Calendar, Briefcase, Filter, X, Pencil, CheckCircle, AlertCircle, Shield, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 
@@ -26,6 +26,9 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterUser, setFilterUser] = useState('');
   
+  // Team Filter
+  const [teamFilter, setTeamFilter] = useState<'ALL' | 'ADMIN' | 'MOTOBOY'>('ALL');
+
   // State for monthly export (Users tab)
   const [exportMonth, setExportMonth] = useState(format(new Date(), 'yyyy-MM'));
 
@@ -36,7 +39,8 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
     password: '', 
     vehiclePlate: '', 
     vehicleModel: '', 
-    clientName: '' 
+    clientName: '',
+    role: UserRole.MOTOBOY as UserRole
   });
 
   useEffect(() => {
@@ -61,7 +65,15 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
   };
 
   const handleOpenNewUserModal = () => {
-    setFormData({ name: '', username: '', password: '', vehiclePlate: '', vehicleModel: '', clientName: '' });
+    setFormData({ 
+        name: '', 
+        username: '', 
+        password: '', 
+        vehiclePlate: '', 
+        vehicleModel: '', 
+        clientName: '', 
+        role: UserRole.MOTOBOY 
+    });
     setEditingUserId(null);
     setShowUserModal(true);
   };
@@ -73,7 +85,8 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
         password: targetUser.password || '',
         vehiclePlate: targetUser.vehiclePlate,
         vehicleModel: targetUser.vehicleModel || '',
-        clientName: targetUser.clientName || ''
+        clientName: targetUser.clientName || '',
+        role: targetUser.role
     });
     setEditingUserId(targetUser.id);
     setShowUserModal(true);
@@ -83,6 +96,9 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
     e.preventDefault();
     if (!formData.name || !formData.username || !formData.password) return;
 
+    // For Admins, vehicle info is optional/not applicable
+    const finalPlate = formData.role === UserRole.ADMIN && !formData.vehiclePlate ? 'ADMIN' : formData.vehiclePlate;
+
     if (editingUserId) {
         // Update Existing
         const updatedUser: User = {
@@ -90,13 +106,13 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
             name: formData.name,
             username: formData.username,
             password: formData.password,
-            vehiclePlate: formData.vehiclePlate,
+            vehiclePlate: finalPlate,
             vehicleModel: formData.vehicleModel,
             clientName: formData.clientName,
-            role: UserRole.MOTOBOY
+            role: formData.role
         };
         storageService.updateUser(updatedUser);
-        showToast('success', 'Colaborador atualizado com sucesso!');
+        showToast('success', 'Usuário atualizado com sucesso!');
     } else {
         // Create New
         const u: User = {
@@ -104,29 +120,33 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
             name: formData.name,
             username: formData.username,
             password: formData.password,
-            vehiclePlate: formData.vehiclePlate,
+            vehiclePlate: finalPlate,
             vehicleModel: formData.vehicleModel,
             clientName: formData.clientName,
-            role: UserRole.MOTOBOY
+            role: formData.role
         };
         storageService.addUser(u);
-        showToast('success', 'Colaborador cadastrado!');
+        showToast('success', 'Usuário cadastrado!');
     }
 
-    setFormData({ name: '', username: '', password: '', vehiclePlate: '', vehicleModel: '', clientName: '' });
     setShowUserModal(false);
     setEditingUserId(null);
     refreshData();
   };
 
   const handleDeleteUser = (id: string) => {
-    if (window.confirm('Tem certeza que deseja remover este colaborador?')) {
+    if (id === user.id) {
+        showToast('error', 'Você não pode se excluir.');
+        return;
+    }
+    if (window.confirm('Tem certeza que deseja remover este usuário?')) {
         storageService.deleteUser(id);
         refreshData();
-        showToast('success', 'Colaborador removido.');
+        showToast('success', 'Usuário removido.');
     }
   };
 
+  // Filter Logs
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.userName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           log.date.includes(searchTerm);
@@ -135,6 +155,12 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
     const matchesUser = filterUser ? log.userId === filterUser : true;
 
     return matchesSearch && matchesDate && matchesMonth && matchesUser;
+  });
+
+  // Filter Team
+  const filteredUsers = users.filter(u => {
+      if (teamFilter === 'ALL') return true;
+      return u.role === teamFilter;
   });
 
   const exportGeneralToExcel = () => {
@@ -257,7 +283,10 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
             </div>
         </div>
         <div className="flex items-center gap-4">
-            <span className="text-sm font-mono text-zinc-500 uppercase">Admin: {user.name}</span>
+            <span className="text-sm font-mono text-zinc-500 uppercase flex items-center gap-2">
+                <ShieldCheck size={16} className="text-yellow-400" />
+                {user.name}
+            </span>
             <button onClick={onLogout} className="text-zinc-500 hover:text-red-500 transition">
                 <LogOut size={20} />
             </button>
@@ -380,7 +409,6 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
                     </div>
 
                     <div className="bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden">
-                        {/* Wrapper for horizontal scroll on smaller screens */}
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse whitespace-nowrap">
                                 <thead className="bg-black text-zinc-500 text-xs uppercase font-mono tracking-widest">
@@ -462,52 +490,84 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
 
             {activeTab === 'users' && (
                 <div className="space-y-6">
-                    <div className="flex justify-between items-end gap-4">
+                    <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                         <div className="flex-1">
                             <h2 className="text-3xl font-graffiti text-zinc-100">Equipe</h2>
-                            <p className="text-zinc-500 text-xs mt-1">Gerenciamento por Cliente e Relatórios</p>
+                            <p className="text-zinc-500 text-xs mt-1">Gerenciamento de Acessos e Relatórios</p>
                         </div>
                         
-                        {/* Month Selector for Export */}
-                        <div className="flex items-center gap-2 bg-zinc-900 p-2 border border-zinc-800 cursor-pointer" onClick={() => {
-                             const el = document.getElementById('export-month-input') as HTMLInputElement;
-                             if(el) el.showPicker();
-                        }}>
-                            <Calendar size={18} className="text-yellow-400"/>
-                            <input 
-                                id="export-month-input"
-                                type="month" 
-                                value={exportMonth}
-                                onChange={(e) => setExportMonth(e.target.value)}
-                                className="bg-transparent text-white font-mono uppercase outline-none text-sm cursor-pointer"
-                            />
-                        </div>
+                        <div className="flex items-center gap-2">
+                            {/* Team Filter Buttons */}
+                            <div className="flex bg-zinc-900 p-1 border border-zinc-800 mr-2">
+                                <button 
+                                    onClick={() => setTeamFilter('ALL')}
+                                    className={`px-3 py-1 text-xs font-bold uppercase ${teamFilter === 'ALL' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                >
+                                    Todos
+                                </button>
+                                <button 
+                                    onClick={() => setTeamFilter('MOTOBOY')}
+                                    className={`px-3 py-1 text-xs font-bold uppercase ${teamFilter === 'MOTOBOY' ? 'bg-purple-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                >
+                                    Motoboys
+                                </button>
+                                <button 
+                                    onClick={() => setTeamFilter('ADMIN')}
+                                    className={`px-3 py-1 text-xs font-bold uppercase ${teamFilter === 'ADMIN' ? 'bg-yellow-500 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                >
+                                    Admins
+                                </button>
+                            </div>
 
-                        <button onClick={handleOpenNewUserModal} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-3 shadow-lg transition uppercase text-sm">
-                            <Plus size={18} />
-                            Novo Piloto
-                        </button>
+                            {/* Month Selector for Export */}
+                            <div className="flex items-center gap-2 bg-zinc-900 p-2 border border-zinc-800 cursor-pointer" onClick={() => {
+                                const el = document.getElementById('export-month-input') as HTMLInputElement;
+                                if(el) el.showPicker();
+                            }}>
+                                <Calendar size={18} className="text-yellow-400"/>
+                                <input 
+                                    id="export-month-input"
+                                    type="month" 
+                                    value={exportMonth}
+                                    onChange={(e) => setExportMonth(e.target.value)}
+                                    className="bg-transparent text-white font-mono uppercase outline-none text-sm cursor-pointer w-24"
+                                />
+                            </div>
+
+                            <button onClick={handleOpenNewUserModal} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-3 shadow-lg transition uppercase text-sm">
+                                <Plus size={18} />
+                                <span className="hidden md:inline">Novo Usuário</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {users.filter(u => u.role === UserRole.MOTOBOY).map(u => (
-                            <div key={u.id} className="bg-zinc-900 border-b-4 border-purple-600 shadow-sm flex flex-col">
+                        {filteredUsers.map(u => (
+                            <div key={u.id} className={`bg-zinc-900 border-b-4 shadow-sm flex flex-col ${u.role === UserRole.ADMIN ? 'border-yellow-400' : 'border-purple-600'}`}>
                                 <div className="p-6 flex-1">
                                     <div className="flex justify-between items-start mb-4">
-                                        <div className="w-12 h-12 bg-zinc-800 rounded-none flex items-center justify-center text-purple-500 font-graffiti text-2xl border border-zinc-700">
-                                            {u.name.charAt(0)}
+                                        <div className={`w-12 h-12 bg-zinc-800 rounded-none flex items-center justify-center font-graffiti text-2xl border border-zinc-700 ${u.role === UserRole.ADMIN ? 'text-yellow-400' : 'text-purple-500'}`}>
+                                            {u.role === UserRole.ADMIN ? <Shield size={24} /> : u.name.charAt(0)}
                                         </div>
                                         <div className="text-right">
-                                            <div className="inline-block bg-yellow-400 text-black px-2 py-0.5 text-xs font-mono font-bold transform -rotate-1 mb-1">
-                                                {u.vehiclePlate || 'SEM PLACA'}
-                                            </div>
-                                            {u.vehicleModel && <div className="text-[10px] text-zinc-500 font-mono uppercase">{u.vehicleModel}</div>}
+                                            {u.role === UserRole.ADMIN ? (
+                                                <div className="inline-block bg-yellow-400 text-black px-2 py-0.5 text-xs font-mono font-bold uppercase mb-1">
+                                                    Administrador
+                                                </div>
+                                            ) : (
+                                                <div className="inline-block bg-purple-600 text-white px-2 py-0.5 text-xs font-mono font-bold uppercase mb-1">
+                                                    Motoboy
+                                                </div>
+                                            )}
+                                            {u.vehiclePlate && u.role === UserRole.MOTOBOY && (
+                                                <div className="text-[10px] text-zinc-500 font-mono font-bold">{u.vehiclePlate}</div>
+                                            )}
                                         </div>
                                     </div>
                                     <h3 className="font-bold text-lg text-white uppercase tracking-tight">{u.name}</h3>
                                     <p className="text-sm text-zinc-500 mb-3 font-mono">@{u.username}</p>
                                     
-                                    {u.clientName && (
+                                    {u.clientName && u.role === UserRole.MOTOBOY && (
                                         <div className="flex items-center gap-2 text-zinc-300 text-xs bg-zinc-800 p-2 border border-zinc-700">
                                             <Briefcase size={12} className="text-purple-400" />
                                             <span className="uppercase font-bold tracking-wide">{u.clientName}</span>
@@ -516,14 +576,18 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
                                 </div>
                                 
                                 <div className="bg-black/20 p-4 border-t border-zinc-800 flex justify-between items-center gap-2">
-                                    <button 
-                                        onClick={() => exportUserMonthlyReport(u)}
-                                        className="text-[10px] font-bold text-green-500 hover:text-green-400 uppercase flex items-center gap-1 transition mr-auto"
-                                        title={`Baixar relatório de ${exportMonth}`}
-                                    >
-                                        <Download size={14} />
-                                        Relatório
-                                    </button>
+                                    {u.role === UserRole.MOTOBOY ? (
+                                        <button 
+                                            onClick={() => exportUserMonthlyReport(u)}
+                                            className="text-[10px] font-bold text-green-500 hover:text-green-400 uppercase flex items-center gap-1 transition mr-auto"
+                                            title={`Baixar relatório de ${exportMonth}`}
+                                        >
+                                            <Download size={14} />
+                                            Relatório
+                                        </button>
+                                    ) : (
+                                        <div className="mr-auto"></div>
+                                    )}
 
                                     <button 
                                         onClick={() => handleOpenEditUserModal(u)}
@@ -552,9 +616,31 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
       {/* Modal for New/Edit User */}
       {showUserModal && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-zinc-900 border-2 border-zinc-700 max-w-md w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-                <h3 className="text-2xl font-graffiti text-white mb-6">{editingUserId ? 'Editar Piloto' : 'Novo Piloto'}</h3>
+            <div className={`bg-zinc-900 border-2 max-w-md w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto ${formData.role === UserRole.ADMIN ? 'border-yellow-400' : 'border-purple-600'}`}>
+                <h3 className="text-2xl font-graffiti text-white mb-6">{editingUserId ? 'Editar Usuário' : 'Novo Usuário'}</h3>
                 <form onSubmit={handleSaveUser} className="space-y-4">
+                    
+                    {/* Role Selection */}
+                    <div>
+                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Tipo de Acesso</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setFormData({...formData, role: UserRole.MOTOBOY})}
+                                className={`py-2 px-4 text-sm font-bold uppercase border-2 transition ${formData.role === UserRole.MOTOBOY ? 'bg-purple-600 border-purple-600 text-white' : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'}`}
+                            >
+                                Motoboy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({...formData, role: UserRole.ADMIN})}
+                                className={`py-2 px-4 text-sm font-bold uppercase border-2 transition ${formData.role === UserRole.ADMIN ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'}`}
+                            >
+                                Administrador
+                            </button>
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Nome Completo</label>
                         <input required type="text" className="w-full bg-black border border-zinc-700 text-white p-3 focus:border-purple-500 outline-none placeholder-zinc-700 font-mono" 
@@ -577,34 +663,39 @@ export const AdminPanel: React.FC<Props> = ({ user, onLogout }) => {
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-purple-400 uppercase tracking-widest mb-1">Cliente / Empresa Atendida</label>
-                        <div className="relative">
-                            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 w-4 h-4" />
-                            <input type="text" placeholder="Ex: Farmácia X, iFood, Loggi" className="w-full pl-10 pr-3 py-3 bg-black border border-zinc-700 text-white focus:border-purple-500 outline-none placeholder-zinc-700 font-mono uppercase" 
-                                value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})}
-                            />
-                        </div>
-                    </div>
+                    {/* Conditional Fields for Motoboy */}
+                    {formData.role === UserRole.MOTOBOY && (
+                        <>
+                            <div>
+                                <label className="block text-xs font-bold text-purple-400 uppercase tracking-widest mb-1">Cliente / Empresa Atendida</label>
+                                <div className="relative">
+                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 w-4 h-4" />
+                                    <input type="text" placeholder="Ex: Farmácia X, iFood, Loggi" className="w-full pl-10 pr-3 py-3 bg-black border border-zinc-700 text-white focus:border-purple-500 outline-none placeholder-zinc-700 font-mono uppercase" 
+                                        value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})}
+                                    />
+                                </div>
+                            </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Modelo da Moto</label>
-                            <input type="text" placeholder="Ex: CG 160" className="w-full bg-black border border-zinc-700 text-white p-3 focus:border-purple-500 outline-none placeholder-zinc-700 font-mono uppercase" 
-                                value={formData.vehicleModel} onChange={e => setFormData({...formData, vehicleModel: e.target.value})}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Placa</label>
-                            <input required type="text" placeholder="ABC-1234" className="w-full bg-black border border-zinc-700 text-white p-3 focus:border-purple-500 outline-none uppercase font-mono" 
-                                value={formData.vehiclePlate} onChange={e => setFormData({...formData, vehiclePlate: e.target.value})}
-                            />
-                        </div>
-                    </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Modelo da Moto</label>
+                                    <input type="text" placeholder="Ex: CG 160" className="w-full bg-black border border-zinc-700 text-white p-3 focus:border-purple-500 outline-none placeholder-zinc-700 font-mono uppercase" 
+                                        value={formData.vehicleModel} onChange={e => setFormData({...formData, vehicleModel: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Placa</label>
+                                    <input required type="text" placeholder="ABC-1234" className="w-full bg-black border border-zinc-700 text-white p-3 focus:border-purple-500 outline-none uppercase font-mono" 
+                                        value={formData.vehiclePlate} onChange={e => setFormData({...formData, vehiclePlate: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     <div className="flex gap-4 mt-8">
                         <button type="button" onClick={() => setShowUserModal(false)} className="flex-1 py-3 text-zinc-400 hover:text-white border border-transparent hover:border-zinc-700 font-bold uppercase text-sm">Cancelar</button>
-                        <button type="submit" className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold uppercase text-sm shadow-lg">Salvar</button>
+                        <button type="submit" className={`flex-1 py-3 font-bold uppercase text-sm shadow-lg ${formData.role === UserRole.ADMIN ? 'bg-yellow-500 hover:bg-yellow-400 text-black' : 'bg-purple-600 hover:bg-purple-500 text-white'}`}>Salvar</button>
                     </div>
                 </form>
             </div>
