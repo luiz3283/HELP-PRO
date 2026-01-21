@@ -1,104 +1,75 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from './types';
 import { storageService } from './services/storage';
 import { MotoboyPanel } from './components/MotoboyPanel';
-import { AdminPanel } from './components/AdminPanel';
-import { Zap, Lock, Download, UserPlus, ArrowLeft, Shield } from 'lucide-react';
+import { Zap, Download, Shield, Bike, Briefcase } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  
-  // Login State
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  
-  // Registration State
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [regName, setRegName] = useState('');
-  const [regUsername, setRegUsername] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [isSetupDone, setIsSetupDone] = useState(false);
+  const [appState, setAppState] = useState<'LOADING' | 'SETUP' | 'WELCOME' | 'APP'>('LOADING');
 
-  // UI State
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  // Setup Form State (First time only)
+  const [regName, setRegName] = useState('');
+  const [regPlate, setRegPlate] = useState('');
+  const [regModel, setRegModel] = useState('');
+  const [regClient, setRegClient] = useState('');
+
   const [showInstallHint, setShowInstallHint] = useState(false);
 
   useEffect(() => {
-    // Check if running in standalone mode (installed)
+    // Check if installed
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-    if (!isStandalone) {
-        setShowInstallHint(true);
+    if (!isStandalone) setShowInstallHint(true);
+
+    // Check for existing user
+    const existingUser = storageService.getMainUser();
+    
+    if (existingUser) {
+        setUser(existingUser);
+        setAppState('WELCOME');
+    } else {
+        setAppState('SETUP');
     }
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSetup = (e: React.FormEvent) => {
     e.preventDefault();
-    const users = storageService.getUsers();
-    const foundUser = users.find(u => u.username === username && u.password === password);
+    if (!regName || !regPlate) return;
 
-    if (foundUser) {
-      setUser(foundUser);
-      setError('');
-    } else {
-      setError('Usuário ou senha inválidos, parça.');
-    }
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMsg('');
-
-    if (!regName || !regUsername || !regPassword) {
-        setError('Preencha todos os campos.');
-        return;
-    }
-
-    if (regPassword !== regConfirmPassword) {
-        setError('As senhas não conferem.');
-        return;
-    }
-
-    const users = storageService.getUsers();
-    if (users.find(u => u.username === regUsername)) {
-        setError('Este usuário já existe.');
-        return;
-    }
-
-    const newAdmin: User = {
+    const newUser: User = {
         id: crypto.randomUUID(),
         name: regName,
-        username: regUsername,
-        password: regPassword,
-        role: UserRole.ADMIN,
-        vehiclePlate: 'ADMIN' // Placeholder for admin
+        username: regName.toLowerCase().replace(/\s+/g, ''),
+        role: UserRole.MOTOBOY,
+        vehiclePlate: regPlate.toUpperCase(),
+        vehicleModel: regModel.toUpperCase(),
+        clientName: regClient
     };
 
-    storageService.addUser(newAdmin);
-    
-    setSuccessMsg('Admin cadastrado! Faça login agora.');
-    setIsRegistering(false);
-    setUsername(regUsername); // Pre-fill login
-    setPassword('');
-    // Clear reg form
-    setRegName('');
-    setRegUsername('');
-    setRegPassword('');
-    setRegConfirmPassword('');
+    storageService.addUser(newUser);
+    setUser(newUser);
+    setAppState('APP'); // Go straight to app after setup
+  };
+
+  const handleEnter = () => {
+    setAppState('APP');
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setUsername('');
-    setPassword('');
+    // Actually just resets to welcome screen in this simplified version
+    // Unless we want to "Clear Data"
+    setAppState('WELCOME');
   };
 
-  // Login / Register Screen
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black p-4">
-        <div className="w-full max-w-md bg-zinc-900/50 border-2 border-yellow-400/20 rounded-sm overflow-hidden relative flex flex-col justify-center backdrop-blur-sm">
+  if (appState === 'APP' && user) {
+    return <MotoboyPanel user={user} onLogout={handleLogout} />;
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black p-4">
+        <div className="w-full max-w-md bg-zinc-900/50 border-2 border-yellow-400/20 rounded-sm overflow-hidden relative flex flex-col justify-center backdrop-blur-sm shadow-2xl">
           
           <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 blur-[80px] opacity-20 pointer-events-none"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-400 blur-[80px] opacity-10 pointer-events-none"></div>
@@ -115,146 +86,101 @@ const App: React.FC = () => {
           
           <div className="p-8 pt-0 relative z-10">
             
-            {/* Toggle Views */}
-            {!isRegistering ? (
-                // LOGIN FORM
-                <form onSubmit={handleLogin} className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
-                
-                {successMsg && (
-                    <div className="p-3 bg-green-900/30 border border-green-500 text-green-400 text-sm font-bold font-mono text-center">
-                        {successMsg}
-                    </div>
-                )}
-
-                <div>
-                    <label className="block text-xs font-bold text-yellow-400 uppercase tracking-widest mb-2 font-mono">Login</label>
-                    <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-4 py-4 bg-black/40 text-white rounded-none border-b-2 border-zinc-600 focus:border-yellow-400 outline-none transition font-mono placeholder-zinc-600 text-lg"
-                    placeholder="Seu usuário"
-                    autoCapitalize="none"
-                    />
-                </div>
-                
-                <div>
-                    <label className="block text-xs font-bold text-yellow-400 uppercase tracking-widest mb-2 font-mono">Senha</label>
-                    <div className="relative">
-                        <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-4 py-4 bg-black/40 text-white rounded-none border-b-2 border-zinc-600 focus:border-yellow-400 outline-none transition font-mono placeholder-zinc-600 text-lg"
-                        placeholder="Sua senha"
-                        />
-                        <Lock className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
-                    </div>
-                </div>
-
-                {error && (
-                    <div className="p-3 bg-red-900/30 border border-red-500 text-red-400 text-sm font-bold font-mono text-center animate-pulse">
-                    {error}
-                    </div>
-                )}
-
-                <button
-                    type="submit"
-                    className="w-full bg-purple-600 text-white font-graffiti text-3xl py-4 mt-4 hover:bg-purple-500 transition transform hover:-translate-y-1 active:translate-y-0 border-2 border-transparent hover:border-white shadow-xl"
-                >
-                    ENTRAR
-                </button>
-
-                <div className="pt-4 text-center border-t border-zinc-800 mt-4">
-                    <button 
-                        type="button" 
-                        onClick={() => { setError(''); setIsRegistering(true); }}
-                        className="text-zinc-500 hover:text-yellow-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto transition"
-                    >
-                        <Shield size={14} />
-                        Criar conta Admin
-                    </button>
-                </div>
-                </form>
-            ) : (
-                // REGISTER FORM
-                <form onSubmit={handleRegister} className="space-y-4 animate-in fade-in slide-in-from-left-8 duration-300">
-                    <div className="flex items-center gap-2 mb-4 text-yellow-400 border-b border-zinc-800 pb-2">
-                        <Shield size={20} />
-                        <span className="font-graffiti text-xl">Novo Chefe</span>
+            {appState === 'SETUP' && (
+                <form onSubmit={handleSetup} className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                    <div className="bg-zinc-800/50 p-4 border border-zinc-700 mb-4">
+                        <p className="text-yellow-400 font-bold uppercase text-xs tracking-widest mb-1">Configuração Inicial</p>
+                        <p className="text-zinc-400 text-[10px]">Informe seus dados para começar. Isso será feito apenas uma vez.</p>
                     </div>
 
                     <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Nome Completo</label>
+                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Seu Nome</label>
                         <input
-                        type="text"
-                        value={regName}
-                        onChange={(e) => setRegName(e.target.value)}
-                        className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
-                        placeholder="Ex: Carlos Admin"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Usuário de Acesso</label>
-                        <input
-                        type="text"
-                        value={regUsername}
-                        onChange={(e) => setRegUsername(e.target.value)}
-                        className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
-                        placeholder="Ex: carlos.adm"
-                        autoCapitalize="none"
+                            required
+                            type="text"
+                            value={regName}
+                            onChange={(e) => setRegName(e.target.value)}
+                            className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
+                            placeholder="Ex: João Silva"
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Senha</label>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Placa da Moto</label>
                             <input
-                            type="password"
-                            value={regPassword}
-                            onChange={(e) => setRegPassword(e.target.value)}
-                            className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
-                            placeholder="***"
+                                required
+                                type="text"
+                                value={regPlate}
+                                onChange={(e) => setRegPlate(e.target.value)}
+                                className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono uppercase"
+                                placeholder="ABC-1234"
                             />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Confirmar</label>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Modelo</label>
                             <input
-                            type="password"
-                            value={regConfirmPassword}
-                            onChange={(e) => setRegConfirmPassword(e.target.value)}
-                            className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
-                            placeholder="***"
+                                type="text"
+                                value={regModel}
+                                onChange={(e) => setRegModel(e.target.value)}
+                                className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
+                                placeholder="CG 160"
                             />
                         </div>
                     </div>
 
-                    {error && (
-                        <div className="p-2 bg-red-900/30 border border-red-500 text-red-400 text-xs font-bold font-mono text-center">
-                        {error}
-                        </div>
-                    )}
+                    <div>
+                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Empresa / Cliente</label>
+                        <input
+                            type="text"
+                            value={regClient}
+                            onChange={(e) => setRegClient(e.target.value)}
+                            className="w-full px-3 py-3 bg-black/40 text-white border-b border-zinc-600 focus:border-yellow-400 outline-none font-mono"
+                            placeholder="Ex: iFood"
+                        />
+                    </div>
 
                     <button
                         type="submit"
-                        className="w-full bg-yellow-500 text-black font-graffiti text-2xl py-3 hover:bg-yellow-400 transition shadow-lg mt-2"
+                        className="w-full bg-purple-600 text-white font-graffiti text-2xl py-3 hover:bg-purple-500 transition shadow-lg mt-4 border-2 border-transparent hover:border-white"
                     >
-                        CADASTRAR
-                    </button>
-
-                    <button 
-                        type="button" 
-                        onClick={() => { setError(''); setIsRegistering(false); }}
-                        className="w-full text-zinc-500 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mt-4"
-                    >
-                        <ArrowLeft size={14} />
-                        Voltar para Login
+                        CRIAR PERFIL
                     </button>
                 </form>
             )}
 
-            {showInstallHint && !isRegistering && (
+            {appState === 'WELCOME' && user && (
+                <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center">
+                     <div className="mb-6 flex flex-col items-center">
+                        <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center border-4 border-yellow-400 mb-4 shadow-[0_0_20px_rgba(250,204,21,0.3)]">
+                            <span className="font-graffiti text-3xl text-white">{user.name.charAt(0)}</span>
+                        </div>
+                        <h2 className="text-white text-xl font-bold uppercase tracking-wide">{user.name}</h2>
+                        <span className="text-zinc-500 font-mono text-sm bg-zinc-900 px-2 py-1 mt-1 border border-zinc-800">{user.vehiclePlate}</span>
+                     </div>
+
+                    <button
+                        onClick={handleEnter}
+                        className="w-full bg-yellow-400 text-black font-graffiti text-4xl py-6 hover:bg-yellow-300 transition transform hover:-translate-y-1 active:translate-y-0 border-2 border-black shadow-[4px_4px_0px_0px_#fff]"
+                    >
+                        ENTRAR
+                    </button>
+
+                    <button 
+                        onClick={() => {
+                            if(window.confirm('Isso apagará seus dados e logs deste dispositivo. Tem certeza?')) {
+                                storageService.clearUsers();
+                                window.location.reload();
+                            }
+                        }}
+                        className="mt-8 text-zinc-600 hover:text-red-500 text-[10px] uppercase font-bold tracking-widest"
+                    >
+                        Resetar Aplicativo
+                    </button>
+                </div>
+            )}
+
+            {showInstallHint && appState !== 'LOADING' && (
                 <div className="mt-8 p-4 bg-zinc-800/50 border border-zinc-700 rounded text-center">
                     <div className="flex items-center justify-center gap-2 text-yellow-400 mb-2">
                         <Download size={18} />
@@ -265,25 +191,10 @@ const App: React.FC = () => {
                     </p>
                 </div>
             )}
-            
-            {!isRegistering && (
-                <div className="mt-8 text-center text-[10px] text-zinc-600 font-mono uppercase tracking-wide">
-                    <p className="mb-2">Acesso Restrito &bull; v1.1.0</p>
-                    <p>Admin Padrão: admin / 123</p>
-                </div>
-            )}
           </div>
         </div>
       </div>
-    );
-  }
-
-  // Role Routing
-  if (user.role === UserRole.ADMIN) {
-    return <AdminPanel user={user} onLogout={handleLogout} />;
-  }
-
-  return <MotoboyPanel user={user} onLogout={handleLogout} />;
+  );
 };
 
 export default App;

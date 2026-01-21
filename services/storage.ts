@@ -1,44 +1,18 @@
-import { User, UserRole, MileageLog } from '../types';
 
-const USERS_KEY = 'motolog_users';
+import { User, MileageLog } from '../types';
+
+const USERS_KEY = 'motolog_users_v2'; // Changed key to avoid conflict with old password-protected data
 const LOGS_KEY = 'motolog_logs';
-
-// Initial Mock Data
-const INITIAL_ADMIN: User = {
-  id: 'admin-1',
-  name: 'Administrador Geral',
-  username: 'admin',
-  password: '123',
-  vehiclePlate: '',
-  role: UserRole.ADMIN,
-};
-
-const INITIAL_MOTOBOY: User = {
-  id: 'moto-1',
-  name: 'João da Silva',
-  username: 'joao',
-  password: '123',
-  vehiclePlate: 'ABC-1234',
-  vehicleModel: 'Honda CG 160 Fan',
-  clientName: 'Farmácia Central',
-  role: UserRole.MOTOBOY,
-};
-
-// Initialize Storage if empty
-const initStorage = () => {
-  if (!localStorage.getItem(USERS_KEY)) {
-    localStorage.setItem(USERS_KEY, JSON.stringify([INITIAL_ADMIN, INITIAL_MOTOBOY]));
-  }
-  if (!localStorage.getItem(LOGS_KEY)) {
-    localStorage.setItem(LOGS_KEY, JSON.stringify([]));
-  }
-};
-
-initStorage();
 
 export const storageService = {
   getUsers: (): User[] => {
     return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+  },
+
+  // In this simplified version, we likely only have one user, but keeping array for compatibility
+  getMainUser: (): User | null => {
+    const users = storageService.getUsers();
+    return users.length > 0 ? users[0] : null;
   },
 
   addUser: (user: User): void => {
@@ -52,13 +26,20 @@ export const storageService = {
     const index = users.findIndex(u => u.id === updatedUser.id);
     if (index !== -1) {
       users[index] = updatedUser;
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    } else {
+      users.push(updatedUser);
     }
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
   },
 
   deleteUser: (userId: string): void => {
-    const users = storageService.getUsers().filter(u => u.id !== userId);
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    const users = storageService.getUsers();
+    const newUsers = users.filter(u => u.id !== userId);
+    localStorage.setItem(USERS_KEY, JSON.stringify(newUsers));
+  },
+
+  clearUsers: (): void => {
+    localStorage.removeItem(USERS_KEY);
   },
 
   getLogs: (): MileageLog[] => {

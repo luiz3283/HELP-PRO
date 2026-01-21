@@ -1,17 +1,18 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
-  MOTOBOY = 'MOTOBOY',
+  MOTOBOY = 'MOTOBOY'
 }
 
 export interface User {
   id: string;
   name: string;
   username: string;
-  password?: string; // In a real app, this would be hashed
-  vehiclePlate: string;
-  vehicleModel?: string; // New: Motorcycle Model (e.g., CG 160)
-  clientName?: string;   // New: Client the motoboy is assigned to
+  password?: string;
   role: UserRole;
+  vehiclePlate: string;
+  vehicleModel?: string; // Motorcycle Model (e.g., CG 160)
+  clientName?: string;   // Client the motoboy is assigned to
 }
 
 export interface MileageLog {

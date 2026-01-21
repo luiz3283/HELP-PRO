@@ -5,7 +5,8 @@ import { analyzeOdometer } from '../services/geminiService';
 import { CameraCapture } from './Camera';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Bike, CheckCircle, Upload, AlertTriangle, Sparkles, LogOut, MapPin } from 'lucide-react';
+import { Bike, CheckCircle, Upload, AlertTriangle, Sparkles, LogOut, MapPin, Download, Calendar } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface Props {
   user: User;
@@ -20,6 +21,9 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedLocation, setCapturedLocation] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  
+  // Export State
+  const [exportMonth, setExportMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   useEffect(() => {
     loadTodayLog();
@@ -114,6 +118,56 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
     setMileageInput('');
   };
 
+  const handleExportExcel = () => {
+    const logs = storageService.getLogs();
+    const userLogs = logs.filter(l => 
+        l.userId === user.id && 
+        l.date.startsWith(exportMonth)
+    ).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (userLogs.length === 0) {
+        setStatusMessage({ type: 'error', text: 'Sem registros neste mês.' });
+        return;
+    }
+
+    const data: any[] = userLogs.map(log => ({
+        Data: format(new Date(log.date + 'T00:00:00'), 'dd/MM/yyyy'),
+        'KM Inicial': log.startKm,
+        'Hora Inicial': log.startTime ? format(new Date(log.startTime), 'HH:mm') : '-',
+        'Local Inicial': log.startLocation || '-',
+        'KM Final': log.endKm || '-',
+        'Hora Final': log.endTime ? format(new Date(log.endTime), 'HH:mm') : '-',
+        'Local Final': log.endLocation || '-',
+        'KM Total': (log.endKm && log.startKm) ? (log.endKm - log.startKm).toFixed(1) : 0, 
+        Status: log.status === 'CLOSED' ? 'Fechado' : 'Aberto'
+    }));
+
+    const totalKmMonth = userLogs.reduce((acc, log) => {
+        if (log.endKm && log.startKm) return acc + (log.endKm - log.startKm);
+        return acc;
+    }, 0);
+
+    data.push({
+        Data: 'TOTAL MÊS',
+        'KM Inicial': '',
+        'Hora Inicial': '',
+        'Local Inicial': '',
+        'KM Final': '',
+        'Hora Final': '',
+        'Local Final': 'SOMA MENSAL:',
+        'KM Total': totalKmMonth.toFixed(1),
+        Status: ''
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Relatorio");
+    
+    const fileName = `Relatorio-${user.name.replace(/\s+/g, '_')}-${exportMonth}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    setStatusMessage({ type: 'success', text: 'Planilha baixada!' });
+  };
+
   if (showCamera) {
     return <CameraCapture onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />;
   }
@@ -147,6 +201,31 @@ export const MotoboyPanel: React.FC<Props> = ({ user, onLogout }) => {
       </div>
 
       <div className="p-4 mt-2 space-y-6">
+        {/* Reports Section (Moved from Admin) */}
+        <div className="bg-zinc-900 p-4 border border-zinc-800 flex flex-col gap-3">
+             <div className="flex items-center gap-2 text-zinc-500 mb-1">
+                <Download size={16} className="text-yellow-400" />
+                <span className="text-xs font-bold uppercase tracking-widest">Relatórios</span>
+             </div>
+             <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <input 
+                        type="month" 
+                        value={exportMonth}
+                        onChange={(e) => setExportMonth(e.target.value)}
+                        className="w-full bg-black border border-zinc-700 text-white p-2 text-xs font-mono uppercase focus:border-yellow-400 outline-none h-10"
+                    />
+                    <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4 pointer-events-none" />
+                </div>
+                <button 
+                    onClick={handleExportExcel}
+                    className="bg-green-600 hover:bg-green-500 text-black font-bold uppercase text-xs px-4 h-10 shadow-lg transition"
+                >
+                    Baixar Excel
+                </button>
+             </div>
+        </div>
+
         {/* Status Card - Gritty Look */}
         <div className={`bg-zinc-900 p-6 border-l-4 shadow-lg relative overflow-hidden group
             ${isDayClosed ? 'border-green-500' : isDayStarted ? 'border-blue-500' : 'border-zinc-700'}`}
