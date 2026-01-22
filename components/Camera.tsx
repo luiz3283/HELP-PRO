@@ -24,8 +24,6 @@ export const CameraCapture: React.FC<CameraProps> = ({ onCapture, onClose }) => 
           const lng = position.coords.longitude;
           
           try {
-            // Fetch readable address from OpenStreetMap (Nominatim)
-            // Note: In a high-traffic production app, you should use your own API Key/Service (e.g., Google Maps Geocoding)
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
             const data = await response.json();
             
@@ -35,7 +33,6 @@ export const CameraCapture: React.FC<CameraProps> = ({ onCapture, onClose }) => 
                 const suburb = data.address.suburb || data.address.neighbourhood || '';
                 const city = data.address.city || data.address.town || data.address.municipality || '';
                 
-                // Construct address: "Rua X, 123 - Bairro"
                 let formatted = [road, number].filter(Boolean).join(', ');
                 if (suburb) formatted += ` - ${suburb}`;
                 if (city) formatted += ` - ${city}`;
@@ -46,7 +43,6 @@ export const CameraCapture: React.FC<CameraProps> = ({ onCapture, onClose }) => 
             }
           } catch (err) {
             console.error("Erro ao buscar endereço:", err);
-            // Fallback to coordinates if fetch fails
             setAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
           }
         },
@@ -121,13 +117,11 @@ export const CameraCapture: React.FC<CameraProps> = ({ onCapture, onClose }) => 
     
     context.fillStyle = '#ffffff';
     context.font = '16px Arial';
-    // Use the fetched address string here
     context.fillText(address, 20, canvas.height - 15);
 
-    // Convert to Base64
-    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+    // Convert to Base64 with reduced quality (0.6) to save storage
+    const imageData = canvas.toDataURL('image/jpeg', 0.6);
     
-    // Stop stream and return data
     stopCamera();
     onCapture(imageData, address);
   }, [stream, address, onCapture]);
@@ -152,12 +146,10 @@ export const CameraCapture: React.FC<CameraProps> = ({ onCapture, onClose }) => 
           className="absolute w-full h-full object-cover"
         />
         
-        {/* Helper Frame Overlay */}
         <div className="absolute border-2 border-yellow-400/50 rounded-lg w-3/4 h-1/3 pointer-events-none flex items-center justify-center">
           <p className="text-yellow-400/80 text-sm font-bold bg-black/60 px-2 rounded uppercase font-mono">Enquadre o odômetro</p>
         </div>
 
-        {/* Live Data Overlay Preview */}
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent text-white">
           <div className="flex items-start gap-2 mb-1">
             <MapPin className="w-4 h-4 text-yellow-400 mt-1 shrink-0" />
@@ -184,7 +176,6 @@ export const CameraCapture: React.FC<CameraProps> = ({ onCapture, onClose }) => 
         </button>
       </div>
       
-      {/* Hidden Canvas for processing */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
